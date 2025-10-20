@@ -1,9 +1,24 @@
 #include <chrono>
 #include <iostream>
+#include <fstream>
 
 extern "C" {
     #include <libavformat/avformat.h>
     #include <libavcodec/avcodec.h>
+    #include <libavutil/imgutils.h>
+}
+
+void save_frame(const AVFrame* frame, const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+
+    // https://en.wikipedia.org/wiki/Netpbm#PGM_example
+    // PGM header
+    file << "P5" << std::endl
+         << frame->width << " " << frame->height << std::endl
+         << "255" << std::endl;
+
+    file.write(reinterpret_cast<char *>(frame->data[0]), frame->height * frame->width);
+    file.close();
 }
 
 int main(int argc, char* argv[]) {
@@ -53,10 +68,13 @@ int main(int argc, char* argv[]) {
             avcodec_send_packet(decoder_context, packet);
             avcodec_receive_frame(decoder_context, frame);
 
+            // if (video_frame_count == 10) save_frame(frame, "frame10.pgm");
+
             std::cout << "Frame " << video_frame_count++ << ", " << av_get_picture_type_char(frame->pict_type)
             << decoder_context->frame_num
                 << ", pts " << frame->pts
                 << ", dts " << frame->pkt_dts
+                << ", pixel format " << frame->format
             << std::endl;
         }
 
