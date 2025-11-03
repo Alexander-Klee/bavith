@@ -13,14 +13,14 @@ void save_pgm(const std::vector<uint8_t>& data, int width, int height, const std
 
 class VideoDecoder {
     std::string _filename;
-    AVFormatContext* format_context;
-    AVStream* video_stream;
-    int video_stream_index;
-    const AVCodec *decoder;
-    AVCodecContext* decoder_context;
+    AVFormatContext* format_context = nullptr;
+    AVStream* video_stream = nullptr;
+    int video_stream_index = -1;
+    const AVCodec *decoder = nullptr;
+    AVCodecContext* decoder_context = nullptr;
     int video_frame_count = 0;
-    AVPacket* packet;
-    AVFrame* frame;
+    AVPacket* packet = nullptr;
+    AVFrame* frame = nullptr;
 
 public:
     explicit VideoDecoder(const std::string &filename) { // TODO: better error handling
@@ -29,9 +29,6 @@ public:
         format_context = avformat_alloc_context();
         avformat_open_input(&format_context, filename.c_str(), nullptr, nullptr); // populate
         avformat_find_stream_info(format_context, nullptr);
-
-        // print info, duration seems wrong?
-        // std::cout << "Format: " << format_context->iformat->name << ", duration: " << format_context->duration / AV_TIME_BASE << "s" << std::endl;
 
         // find video stream
         video_stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
@@ -109,17 +106,17 @@ public:
 
 class VideoEncoder {
 // https://ffmpeg.org/doxygen/trunk/doc_2examples_2mux_8c_source.html
-    AVCodecContext* encoder_context; // TODO free this
-    const AVOutputFormat *output_format;  // TODO free this
-    AVFormatContext *output_context;  // TODO free this
-    const AVCodec *video_codec;  // TODO free this
-    AVFrame* frame; // TODO free this (buffer)
-    AVPacket* packet;
-    AVStream* stream;  // TODO free this
-    int _height;
-    int _width;
+    AVCodecContext* encoder_context = nullptr;
+    const AVOutputFormat *output_format = nullptr;
+    AVFormatContext *output_context = nullptr;
+    const AVCodec *video_codec = nullptr;
+    AVFrame* frame = nullptr;
+    AVPacket* packet = nullptr;
+    AVStream* stream = nullptr;
     int64_t next_pts = 0;
     int64_t frame_index = 0;
+    int _height = 0;
+    int _width = 0;
 
 public:
     explicit VideoEncoder(const std::string &filename, const int width, const int height, const int fps = 25) {
@@ -235,7 +232,6 @@ public:
     }
 
     void encode_frame() {
-
         // populate frame with data
         _gen_frame();
 
@@ -266,8 +262,6 @@ public:
     }
 
     ~VideoEncoder() {
-        // TODO idk where to put this ...
-        // TODO ensure more than one frame gets written
         // write the end of the file
         av_write_trailer(output_context);
 
