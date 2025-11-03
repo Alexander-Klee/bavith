@@ -27,9 +27,15 @@ public:
         _filename = filename;
         // create Context for a video
         format_context = avformat_alloc_context();
-        avformat_open_input(&format_context, filename.c_str(), nullptr, nullptr); // populate
-        avformat_find_stream_info(format_context, nullptr);
+        if (format_context == nullptr)
+            throw std::runtime_error("Failed to allocate AVFormatContext");
+        if (avformat_open_input(&format_context, filename.c_str(), nullptr, nullptr))
+            throw std::runtime_error("Could not open file");
+        if (avformat_find_stream_info(format_context, nullptr))
+            throw std::runtime_error("Could not find stream info");
 
+
+        // TODO: error handeling
         // find video stream
         video_stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
         video_stream = format_context->streams[video_stream_index];
@@ -67,6 +73,10 @@ public:
         return format_context->streams[video_stream_index]->codecpar->format;
     }
 
+    [[nodiscard]] AVRational get_frame_rate() const {
+        return format_context->streams[video_stream_index]->avg_frame_rate;
+    }
+
     [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> next_frame() const {
         // read frames from streams in the file until EOF
         if (av_read_frame(format_context, packet) < 0) {
@@ -87,8 +97,8 @@ public:
             return std::unexpected("failed to receive frame");
         }
 
-        auto pixel_format = static_cast<enum AVPixelFormat>(frame->format);
-        int buf_size = av_image_get_buffer_size(pixel_format, get_width(), get_height(), 1);
+        const auto pixel_format = static_cast<enum AVPixelFormat>(frame->format);
+        const int buf_size = av_image_get_buffer_size(pixel_format, get_width(), get_height(), 1);
         std::vector<uint8_t> image_buf(buf_size);
 
         // copy the image data
@@ -119,12 +129,13 @@ class VideoEncoder {
     int _width = 0;
 
 public:
-    explicit VideoEncoder(const std::string &filename, const int width, const int height, const int fps = 25) {
+    explicit VideoEncoder(const std::string &filename, const int width, const int height, const AVRational fps = {25, 1}) {
         _width = width;
         _height = height;
+        // TODO handle pixel format
+        // TODO handle fps
 
         // guess output format based on filename
-        // TODO: here might be an error??
         if (avformat_alloc_output_context2(&output_context, nullptr, nullptr, filename.c_str()) < 0) {
             throw std::runtime_error("failed to allocate output context");
         }
@@ -164,7 +175,8 @@ public:
         encoder_context->width= width;
         encoder_context->height = height;
 
-        stream->time_base = (AVRational){1, fps};
+        // stream->time_base = AVRational{fps.den, fps.num }; // reciprocal of fps
+        stream->time_base = AVRational{1, 25 }; // reciprocal of fps
         encoder_context->time_base = stream->time_base;
         encoder_context->gop_size = 12;
         encoder_context->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -261,6 +273,43 @@ public:
         }
     }
 
+    void encode_frame2(const std::vector<uint8_t> &image_buf) {
+        // ensure image_buf size
+        int buf_size = av_image_get_buffer_size(encoder_context->pix_fmt, _width, _height, 1);
+        if (image_buf.size() != buf_size) {
+            throw std::runtime_error("image buffer has wrong size!");
+        }
+        // put image into frame (copying should not be necessary, right?)
+        av_image_fill_arrays(frame->data, frame->linesize, image_buf.data(), encoder_context->pix_fmt, _width, _height, 1);
+
+        frame->pts = next_pts++;
+
+        // encode frame
+        if (avcodec_send_frame(encoder_context, frame)) {
+            throw std::runtime_error("failed to send frame");
+        }
+
+        // frame may end up as multiple packets
+        while (true) {
+            // receive encoded frame
+            const int ret = avcodec_receive_packet(encoder_context, packet);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                break;
+            } else if (ret < 0) {
+                throw std::runtime_error(std::string("failed to receive packet") + av_err2str(ret));
+            }
+
+            // rescale time on packet
+            av_packet_rescale_ts(packet, encoder_context->time_base, stream->time_base);
+            packet->stream_index = stream->index;
+
+            // write and unref the packet
+            if (av_interleaved_write_frame(output_context, packet) < 0) {
+                throw std::runtime_error("failed to write frame");
+            }
+        }
+    }
+
     void flush_encoder() {
         int ret = avcodec_send_frame(encoder_context, nullptr);
         if (ret < 0 && ret != AVERROR_EOF) {
@@ -326,24 +375,31 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const char* filename = argv[1];
+    const char* filename_src = argv[1];
+    const char* filename_dst = argv[2];
 
-    // VideoDecoder v(filename);
-    // v.dump_info();
-    //
-    // for (int i = 0; i < 4; ++i) {
-    //     if (auto res = v.next_frame()) {
-    //         // do sth with value
-    //         save_pgm(res.value(), v.get_width(), v.get_height(), "frame" + std::to_string(i) + ".pgm");
-    //     } else {
-    //         std::cout << res.error() << std::endl;
-    //     }
-    // }
 
-    VideoEncoder encoder(filename, 352, 288);
+    const VideoDecoder decoder(filename_src);
+    decoder.dump_info();
+    std::cout << "fps: " << static_cast<double>(decoder.get_frame_rate().num) / decoder.get_frame_rate().den << std::endl;
 
-    for (int i = 1; i < 25; i++) {
-        encoder.encode_frame();
+    if (!decoder.get_frame_rate().den || !decoder.get_frame_rate().num) {
+        std::cout << "No frame rate!" << std::endl;
+        return 1;
+    }
+
+    VideoEncoder encoder(filename_dst, decoder.get_width(), decoder.get_height(), decoder.get_frame_rate());
+
+    int f = 0;
+    for (int i = 0; i < 120; ++i) {
+        if (auto res = decoder.next_frame()) {
+            // do sth with value
+            save_pgm(res.value(), decoder.get_width(), decoder.get_height(), "frame" + std::to_string(f++) + ".pgm");
+            encoder.encode_frame2(res.value());
+            std::cout << "frame: " + std::to_string(f) << std::endl;
+        } else {
+            std::cout << res.error() << std::endl;
+        }
     }
 
     return 0;
