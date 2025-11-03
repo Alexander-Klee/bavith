@@ -261,7 +261,35 @@ public:
         }
     }
 
+    void flush_encoder() {
+        int ret = avcodec_send_frame(encoder_context, nullptr);
+        if (ret < 0 && ret != AVERROR_EOF) {
+            throw std::runtime_error("flushing encoder failed");
+        }
+
+        while (true) {
+            ret = avcodec_receive_packet(encoder_context, packet);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                break;
+            } else if (ret < 0) {
+                throw std::runtime_error("failed to receive packet (flush)");
+            }
+
+            // rescale time on packet
+            av_packet_rescale_ts(packet, encoder_context->time_base, stream->time_base);
+            packet->stream_index = stream->index;
+
+            // write and unref the packet
+            if (av_interleaved_write_frame(output_context, packet) < 0) {
+                throw std::runtime_error("failed to write frame");
+            }
+        }
+    }
+
     ~VideoEncoder() {
+        // flush encoder
+        flush_encoder();
+
         // write the end of the file
         av_write_trailer(output_context);
 
@@ -314,7 +342,7 @@ int main(int argc, char* argv[]) {
 
     VideoEncoder encoder(filename, 352, 288);
 
-    for (int i = 1; i < 2; i++) {
+    for (int i = 1; i < 25; i++) {
         encoder.encode_frame();
     }
 
