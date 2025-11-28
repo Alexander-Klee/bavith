@@ -1,6 +1,8 @@
-# Viscount
+# Bavith
 
-VIdeoS COmparison UTility. Don't ask about the n.
+**/ˈbeɪsɪks/** (BAsic VIdeo)
+
+Simple libav wrapper for decoding/demuxing as well as encoding/muxing video.
 
 # Requirements
 

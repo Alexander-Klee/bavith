@@ -35,7 +35,7 @@ public:
             throw std::runtime_error("Could not find stream info");
 
 
-        // TODO: error handeling
+        // TODO: error handling
         // find video stream
         video_stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
         video_stream = format_context->streams[video_stream_index];
@@ -391,12 +391,13 @@ int main(int argc, char* argv[]) {
     VideoEncoder encoder(filename_dst, decoder.get_width(), decoder.get_height(), decoder.get_frame_rate());
 
     int f = 0;
-    for (int i = 0; i < 120; ++i) {
+    for (int i = 0; i < 120;) {
         if (auto res = decoder.next_frame()) {
             // do sth with value
-            save_pgm(res.value(), decoder.get_width(), decoder.get_height(), "frame" + std::to_string(f++) + ".pgm");
+            // save_pgm(res.value(), decoder.get_width(), decoder.get_height(), "frame" + std::to_string(f++) + ".pgm");
             encoder.encode_frame2(res.value());
             std::cout << "frame: " + std::to_string(f) << std::endl;
+            i++;
         } else {
             std::cout << res.error() << std::endl;
         }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.1)
-project(viscount)
+project(bavith)
 
 set(CMAKE_CXX_STANDARD 23)
 
