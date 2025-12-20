@@ -65,7 +65,7 @@ void VideoDecoder::dump_info() const {
 }
 
 [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> VideoDecoder::next_frame_image() const {
-    next_frame();
+    next_frame(); // TODO what should the API actually look like?
 
     const auto pixel_format = static_cast<enum AVPixelFormat>(frame->format);
     const int buf_size = av_image_get_buffer_size(pixel_format, get_width(), get_height(), 1);
