@@ -5,6 +5,10 @@
 #include "include/decoder.h"
 #include "include/encoder.h"
 
+// TODO:
+// - better api
+// - seeking
+
 void save_pgm(const std::vector<uint8_t>& data, int width, int height, const std::string& filename) {
     std::ofstream file(filename, std::ios::binary);
 
@@ -29,7 +33,7 @@ int main(int argc, char* argv[]) {
     const char* filename_dst = argv[2];
 
 
-    const VideoDecoder decoder(filename_src);
+    VideoDecoder decoder(filename_src);
     // decoder.dump_info();
     std::cout << "fps: " << static_cast<double>(decoder.get_frame_rate().num) / decoder.get_frame_rate().den << std::endl;
 
@@ -40,11 +44,17 @@ int main(int argc, char* argv[]) {
 
     VideoEncoder encoder(filename_dst, decoder.get_width(), decoder.get_height(), decoder.get_frame_rate());
 
-    // copy first 120 Frames to another file
-    for (int i = 1; i <= 120;) {
-        if (auto res = decoder.next_frame_image2()) {
+    int i = 0;
+    while (true) {
+        if (i > 120) break; // stop at frame 120
+
+        if (decoder.decode_next_frame()) {
+            std::cout << "EOF" << std::endl;
+            break;
+        }
+        if (auto res = decoder.get_frame_vector()) {
             // do sth with value
-            // save_pgm(res.value(), decoder.get_width(), decoder.get_height(), "frame" + std::to_string(f++) + ".pgm");
+            // save_pgm(res.value(), decoder.get_width(), decoder.get_height(), "frame" + std::to_string(i) + ".pgm");
             encoder.encode_frame(res.value());
             std::cout << "frame: " + std::to_string(i) << std::endl;
             i++;

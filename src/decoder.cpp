@@ -63,10 +63,10 @@ void VideoDecoder::dump_info() const {
 [[nodiscard]] AVRational VideoDecoder::get_frame_rate() const {
     return format_context->streams[video_stream_index]->avg_frame_rate;
 }
+[[nodiscard]] AVFrame* VideoDecoder::get_frame() const { return frame; }
 
-[[nodiscard]] std::expected<std::vector<uint8_t>, std::string> VideoDecoder::next_frame_image() const {
-    next_frame(); // TODO what should the API actually look like?
-
+[[nodiscard]] std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
+    // copy to CPU memory
     const auto pixel_format = static_cast<enum AVPixelFormat>(frame->format);
     const int buf_size = av_image_get_buffer_size(pixel_format, get_width(), get_height(), 1);
     std::vector<uint8_t> image_buf(buf_size);
@@ -77,66 +77,38 @@ void VideoDecoder::dump_info() const {
         return std::unexpected("failed to copy frame");
     }
 
-    // wipe frame and packet for next iteration
-    av_frame_unref(frame);
-    av_packet_unref(packet);
     return image_buf;
 }
 
-[[nodiscard]] std::expected<std::vector<uint8_t>, std::string> VideoDecoder::next_frame_image2() const {
-    // read frames from streams in the file until EOF
-    if (av_read_frame(format_context, packet) < 0) {
-        return std::unexpected("failed to read frame or EOF");
-    }
-
-    // check if stream is the chosen stream
-    if (packet->stream_index != video_stream_index) {
-        return std::unexpected("packet is not part of video stream");
-    }
-
-    // video has only one frame per packet
-    // decode packet to get frame
-    if (avcodec_send_packet(decoder_context, packet) < 0) {
-        return std::unexpected("failed to send packet");
-    }
-    if (avcodec_receive_frame(decoder_context, frame) < 0) {
-        return std::unexpected("failed to receive frame");
-    }
-
-    const auto pixel_format = static_cast<enum AVPixelFormat>(frame->format);
-    const int buf_size = av_image_get_buffer_size(pixel_format, get_width(), get_height(), 1);
-    std::vector<uint8_t> image_buf(buf_size);
-
-    // copy the image data
-    if (av_image_copy_to_buffer(image_buf.data(), buf_size,
-            frame->data, frame->linesize, pixel_format, get_width(), get_height(), 1) < 0) {
-        return std::unexpected("failed to copy frame");
-    }
-
-    // wipe frame and packet for next iteration
-    av_frame_unref(frame);
-    av_packet_unref(packet);
-    return image_buf;
+bool VideoDecoder::is_end_of_stream() const {
+    return end_of_stream;
 }
 
-[[nodiscard]] std::expected<AVFrame*, std::string> VideoDecoder::next_frame() const {
-    // read frames from streams in the file until EOF
-    if (av_read_frame(format_context, packet) < 0) {
-        return std::unexpected("failed to read frame or EOF");
-    }
+int VideoDecoder::decode_next_frame() {
+    // TODO is this the correct place? shouldnt this be done after sth? (consider the final end of streaming. Should this also be in the deconstr?)
+    // wipe frame and packet
+    av_frame_unref(frame);
+    av_packet_unref(packet);
 
-    // check if stream is the chosen stream
-    if (packet->stream_index != video_stream_index) {
-        return std::unexpected("packet is not part of video stream");
-    }
+    while (true) { // TODO: limit this?
+        // DEMUX
+        // TODO: check for error in av_read_frame (pkt will be blank)
+        if (av_read_frame(format_context, packet) < 0) {
+            end_of_stream = true;
+            return EOF;
+        }
 
-    // video has only one frame per packet
-    // decode packet to get frame
-    if (avcodec_send_packet(decoder_context, packet) < 0) {
-        return std::unexpected("failed to send packet");
+        // skip if not from selected stream
+        if (packet->stream_index != video_stream_index) continue;
+
+        // DECODE
+        // video has only one frame per packet, decode to get frame
+        auto res = avcodec_send_packet(decoder_context, packet);
+        if (res < 0) return res;
+
+        res = avcodec_receive_frame(decoder_context, frame);
+        if (res < 0) return res;
+
+        return 0;
     }
-    if (avcodec_receive_frame(decoder_context, frame) < 0) {
-        return std::unexpected("failed to receive frame");
-    }
-    return frame;
 }

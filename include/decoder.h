@@ -24,6 +24,7 @@ class VideoDecoder {
     int video_frame_count = 0;
     AVPacket* packet = nullptr;
     AVFrame* frame = nullptr;
+    bool end_of_stream = false;
 
 public:
     explicit VideoDecoder(const std::string &filename);
@@ -35,10 +36,11 @@ public:
     [[nodiscard]] int get_height() const;
     [[nodiscard]] int get_pixel_format() const;
     [[nodiscard]] AVRational get_frame_rate() const;
+    [[nodiscard]] AVFrame* get_frame() const;
+    [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> get_frame_vector() const;
+    [[nodiscard]] bool is_end_of_stream() const;
 
-    [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> next_frame_image() const;
-    [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> next_frame_image2() const;
-    [[nodiscard]] std::expected<AVFrame*, std::string> next_frame() const;
+    int decode_next_frame();
 };
 
 #endif //BAVITH_DECODER_H
