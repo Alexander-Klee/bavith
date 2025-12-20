@@ -16,6 +16,8 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
 
 add_executable(${PROJECT_NAME}
         main.cpp
+        encoder.cpp encoder.h
+        decoder.cpp decoder.h
 )
 
 target_link_libraries(${PROJECT_NAME}
