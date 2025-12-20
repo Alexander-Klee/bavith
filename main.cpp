@@ -2,8 +2,8 @@
 #include <iostream>
 #include <fstream>
 
-#include "decoder.h"
-#include "encoder.h"
+#include "include/decoder.h"
+#include "include/encoder.h"
 
 void save_pgm(const std::vector<uint8_t>& data, int width, int height, const std::string& filename) {
     std::ofstream file(filename, std::ios::binary);

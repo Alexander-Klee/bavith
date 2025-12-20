@@ -1,7 +1,7 @@
 //
 // Created by alex on 20.12.25.
 //
-#include "encoder.h"
+#include "../include/encoder.h"
 
 #include <stdexcept>
 

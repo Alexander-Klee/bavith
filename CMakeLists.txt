@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 4.1)
-project(bavith)
+project(bavith VERSION 0.0.1)
 
 set(CMAKE_CXX_STANDARD 23)
+
+option(BUILD_EXAMPLES "Build example executable" OFF)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
@@ -14,12 +16,20 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
         libavutil
 )
 
-add_executable(${PROJECT_NAME}
-        main.cpp
-        encoder.cpp encoder.h
-        decoder.cpp decoder.h
+add_library(${PROJECT_NAME}
+        src/encoder.cpp
+        src/decoder.cpp
+)
+
+target_include_directories(${PROJECT_NAME}
+        PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(${PROJECT_NAME}
-        PkgConfig::LIBAV
+        PUBLIC PkgConfig::LIBAV
 )
+
+if(BUILD_EXAMPLES)
+    add_executable(${PROJECT_NAME}_example main.cpp)
+    target_link_libraries(${PROJECT_NAME}_example PRIVATE ${PROJECT_NAME})
+endif()

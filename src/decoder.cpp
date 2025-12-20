@@ -2,7 +2,7 @@
 // Created by alex on 20.12.25.
 //
 
-#include "decoder.h"
+#include "../include/decoder.h"
 
 #include <stdexcept>
 
