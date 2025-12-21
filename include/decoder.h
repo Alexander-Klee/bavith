@@ -25,7 +25,7 @@ class VideoDecoder {
     AVPacket* packet = nullptr;
     AVFrame* frame = nullptr;
     bool end_of_stream = false;
-    double frame_time = 0;
+    int64_t frame_pts = 0;
     double duration = 0;
 
 public:

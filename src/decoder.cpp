@@ -55,8 +55,8 @@ int VideoDecoder::get_height() const { return format_context->streams[video_stre
 int VideoDecoder::get_pixel_format() const { return format_context->streams[video_stream_index]->codecpar->format; }
 AVRational VideoDecoder::get_frame_rate() const { return format_context->streams[video_stream_index]->avg_frame_rate; }
 double VideoDecoder::get_duration() const { return duration; }
-double VideoDecoder::get_frame_time() const { return frame_time; }
-double VideoDecoder::get_progress() const { return 100 * frame_time / duration; }
+double VideoDecoder::get_frame_time() const { return static_cast<double>(frame_pts) * av_q2d(video_stream->time_base);; }
+double VideoDecoder::get_progress() const { return 100 * get_frame_time() / duration; }
 AVFrame* VideoDecoder::get_frame() const { return frame; }
 
 std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
@@ -81,18 +81,25 @@ bool VideoDecoder::is_end_of_stream() const {
 void VideoDecoder::seek(const double fraction) {
     // calc & rescale timestamp
     AVRational target_time_base = video_stream->time_base;
-    int64_t target = av_rescale_q(format_context->duration * fraction, AV_TIME_BASE_Q, target_time_base);
+    int64_t target_pts = av_rescale_q(format_context->duration * fraction, AV_TIME_BASE_Q, target_time_base);
 
     // seek to nearest keyframe
-    av_seek_frame(format_context, video_stream_index, target, AVSEEK_FLAG_BACKWARD);
+    av_seek_frame(format_context, video_stream_index, target_pts, AVSEEK_FLAG_BACKWARD);
     // TODO maybe advance frames to the exact specified one?
 
     avcodec_flush_buffers(decoder_context);
+
+    // decode a frame from the new location
+    while (!decode_next_frame()) {
+        if (frame_pts >= target_pts)
+            break;
+    }
 }
 
 
 int VideoDecoder::decode_next_frame() {
     // TODO is this the correct place? shouldnt this be done after sth? (consider the final end of streaming. Should this also be in the deconstr?)
+    // TODO think about the last time for unreffing?
     // wipe frame and packet
     av_frame_unref(frame);
     av_packet_unref(packet);
@@ -105,9 +112,6 @@ int VideoDecoder::decode_next_frame() {
             return EOF;
         }
 
-        // TODO: use packet->pts or frame->best_effort_timestamp?
-        frame_time = static_cast<double>(packet->pts) * av_q2d(video_stream->time_base);
-
         // skip if not from selected stream
         if (packet->stream_index != video_stream_index) continue;
 
@@ -117,7 +121,11 @@ int VideoDecoder::decode_next_frame() {
         if (res < 0) return res;
 
         res = avcodec_receive_frame(decoder_context, frame);
+        if (res == AVERROR(EAGAIN)) continue; // need more packets
         if (res < 0) return res;
+
+        // update the frame_time
+        frame_pts = (frame->pts != AV_NOPTS_VALUE)? frame->pts : frame->best_effort_timestamp;
 
         return 0;
     }
