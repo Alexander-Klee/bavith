@@ -78,6 +78,19 @@ bool VideoDecoder::is_end_of_stream() const {
     return end_of_stream;
 }
 
+void VideoDecoder::seek(const double fraction) {
+    // calc & rescale timestamp
+    AVRational target_time_base = video_stream->time_base;
+    int64_t target = av_rescale_q(format_context->duration * fraction, AV_TIME_BASE_Q, target_time_base);
+
+    // seek to nearest keyframe
+    av_seek_frame(format_context, video_stream_index, target, AVSEEK_FLAG_BACKWARD);
+    // TODO maybe advance frames to the exact specified one?
+
+    avcodec_flush_buffers(decoder_context);
+}
+
+
 int VideoDecoder::decode_next_frame() {
     // TODO is this the correct place? shouldnt this be done after sth? (consider the final end of streaming. Should this also be in the deconstr?)
     // wipe frame and packet

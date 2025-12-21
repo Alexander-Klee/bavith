@@ -50,6 +50,8 @@ public:
     [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> get_frame_vector() const;
     [[nodiscard]] bool is_end_of_stream() const;
 
+    void seek(double fraction);
+
     /** Decode the next frame
      *
      * demux+decode the next frame of the selected video stream, disregarding all other streams.
