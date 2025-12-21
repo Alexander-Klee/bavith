@@ -56,6 +56,7 @@ int VideoDecoder::get_pixel_format() const { return format_context->streams[vide
 AVRational VideoDecoder::get_frame_rate() const { return format_context->streams[video_stream_index]->avg_frame_rate; }
 double VideoDecoder::get_duration() const { return duration; }
 double VideoDecoder::get_frame_time() const { return frame_time; }
+double VideoDecoder::get_progress() const { return 100 * frame_time / duration; }
 AVFrame* VideoDecoder::get_frame() const { return frame; }
 
 std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {

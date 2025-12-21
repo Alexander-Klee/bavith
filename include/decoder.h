@@ -40,6 +40,7 @@ public:
     [[nodiscard]] AVRational get_frame_rate() const;
     [[nodiscard]] double get_duration() const;
     [[nodiscard]] double get_frame_time() const;
+    [[nodiscard]] double get_progress() const;
     [[nodiscard]] AVFrame* get_frame() const;
 
     /** Get the frame as a std::vector.
