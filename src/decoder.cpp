@@ -37,6 +37,12 @@ VideoDecoder::VideoDecoder(const std::string &filename) { // TODO: better error 
 
     packet = av_packet_alloc();
     frame = av_frame_alloc();
+
+    // discard all non-video streams
+    // for (unsigned i = 0; i < format_context->nb_streams; i++) {
+    //     if (format_context->streams[i]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
+    //         format_context->streams[i]->discard = AVDISCARD_ALL;
+    // }
 }
 
 VideoDecoder::~VideoDecoder() {
@@ -97,37 +103,68 @@ void VideoDecoder::seek(const double fraction) {
     }
 }
 
-
 int VideoDecoder::decode_next_frame() {
-    // TODO is this the correct place? shouldnt this be done after sth? (consider the final end of streaming. Should this also be in the deconstr?)
-    // TODO think about the last time for unreffing?
-    // wipe frame and packet
-    av_frame_unref(frame);
-    av_packet_unref(packet);
+    int ret;
 
-    while (true) { // TODO: limit this?
-        // DEMUX
-        // TODO: check for error in av_read_frame (pkt will be blank)
-        if (av_read_frame(format_context, packet) < 0) {
-            end_of_stream = true;
-            return EOF;
+    while (true) {
+        ret = avcodec_receive_frame(decoder_context, frame);
+
+        if (ret == 0) {
+            frame_pts = frame->pts;
+            video_frame_count++;
+            return 0;
+        }
+        else if (ret == AVERROR(EAGAIN)) {
+            // Decoder needs more packets (loop below)
+        }
+        else if (ret == AVERROR_EOF) {
+            // Decoder is fully flushed.
+            return AVERROR_EOF;
+        }
+        else {
+            // Decoding error
+            char errbuf[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(ret, errbuf, sizeof(errbuf));
+            fprintf(stderr, "Error receiving frame: %s\n", errbuf);
+            return ret;
         }
 
-        // skip if not from selected stream
-        if (packet->stream_index != video_stream_index) continue;
+        if (end_of_stream) return AVERROR_EOF;
 
-        // DECODE
-        // video has only one frame per packet, decode to get frame
-        auto res = avcodec_send_packet(decoder_context, packet);
-        if (res < 0) return res;
+        // Loop reading packets until we find one for our video stream
+        while (true) {
+            ret = av_read_frame(format_context, packet);
 
-        res = avcodec_receive_frame(decoder_context, frame);
-        if (res == AVERROR(EAGAIN)) continue; // need more packets
-        if (res < 0) return res;
+            if (ret == AVERROR_EOF) {
+                end_of_stream = true;
 
-        // update the frame_time
-        frame_pts = (frame->pts != AV_NOPTS_VALUE)? frame->pts : frame->best_effort_timestamp;
+                // EOF => Flush decoder
+                ret = avcodec_send_packet(decoder_context, nullptr);
+                if (ret < 0) {
+                    fprintf(stderr, "Error sending flush packet\n");
+                    return ret;
+                }
+                break; // drain decoder (receive frames)
+            } else if (ret < 0) {
+                return ret;
+            }
 
-        return 0;
+            // check if this packet belongs to video stream
+            if (packet->stream_index == video_stream_index) {
+                // Send the packet to the decoder
+                ret = avcodec_send_packet(decoder_context, packet);
+                av_packet_unref(packet);
+
+                if (ret < 0) {
+                    fprintf(stderr, "Error sending packet for decoding\n");
+                    return ret;
+                }
+
+                break; // break to go to recieving frames
+            }
+
+            // otherwise discard and continue reading
+            av_packet_unref(packet);
+        }
     }
 }
