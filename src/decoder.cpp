@@ -88,6 +88,7 @@ void VideoDecoder::seek(const double fraction) {
     // TODO maybe advance frames to the exact specified one?
 
     avcodec_flush_buffers(decoder_context);
+    end_of_stream = false;
 
     // decode a frame from the new location
     while (!decode_next_frame()) {
