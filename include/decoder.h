@@ -25,6 +25,8 @@ class VideoDecoder {
     AVPacket* packet = nullptr;
     AVFrame* frame = nullptr;
     bool end_of_stream = false;
+    double frame_time = 0;
+    double duration = 0;
 
 public:
     explicit VideoDecoder(const std::string &filename);
@@ -36,10 +38,23 @@ public:
     [[nodiscard]] int get_height() const;
     [[nodiscard]] int get_pixel_format() const;
     [[nodiscard]] AVRational get_frame_rate() const;
+    [[nodiscard]] double get_duration() const;
+    [[nodiscard]] double get_frame_time() const;
     [[nodiscard]] AVFrame* get_frame() const;
+
+    /** Get the frame as a std::vector.
+     *
+     * @return the frame as an vector in cpu memory or a string on error.
+     */
     [[nodiscard]] std::expected<std::vector<uint8_t>, std::string> get_frame_vector() const;
     [[nodiscard]] bool is_end_of_stream() const;
 
+    /** Decode the next frame
+     *
+     * demux+decode the next frame of the selected video stream, disregarding all other streams.
+     *
+     * @return 0 on success, < 0 on error or EOF
+     */
     int decode_next_frame();
 };
 

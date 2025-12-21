@@ -27,6 +27,8 @@ VideoDecoder::VideoDecoder(const std::string &filename) { // TODO: better error 
     video_stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     video_stream = format_context->streams[video_stream_index];
 
+    duration = static_cast<double>(format_context->duration) / AV_TIME_BASE;
+
     // create decoder (and context) for video stream
     decoder = avcodec_find_decoder(format_context->streams[video_stream_index]->codecpar->codec_id);
     decoder_context = avcodec_alloc_context3(decoder);
@@ -48,24 +50,15 @@ void VideoDecoder::dump_info() const {
     av_dump_format(format_context, 0, _filename.c_str(), 0);
 }
 
-[[nodiscard]] int VideoDecoder::get_width() const {
-    return format_context->streams[video_stream_index]->codecpar->width;
-}
+int VideoDecoder::get_width() const { return format_context->streams[video_stream_index]->codecpar->width; }
+int VideoDecoder::get_height() const { return format_context->streams[video_stream_index]->codecpar->height; }
+int VideoDecoder::get_pixel_format() const { return format_context->streams[video_stream_index]->codecpar->format; }
+AVRational VideoDecoder::get_frame_rate() const { return format_context->streams[video_stream_index]->avg_frame_rate; }
+double VideoDecoder::get_duration() const { return duration; }
+double VideoDecoder::get_frame_time() const { return frame_time; }
+AVFrame* VideoDecoder::get_frame() const { return frame; }
 
-[[nodiscard]] int VideoDecoder::get_height() const {
-    return format_context->streams[video_stream_index]->codecpar->height;
-}
-
-[[nodiscard]] int VideoDecoder::get_pixel_format() const {
-    return format_context->streams[video_stream_index]->codecpar->format;
-}
-
-[[nodiscard]] AVRational VideoDecoder::get_frame_rate() const {
-    return format_context->streams[video_stream_index]->avg_frame_rate;
-}
-[[nodiscard]] AVFrame* VideoDecoder::get_frame() const { return frame; }
-
-[[nodiscard]] std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
+std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
     // copy to CPU memory
     const auto pixel_format = static_cast<enum AVPixelFormat>(frame->format);
     const int buf_size = av_image_get_buffer_size(pixel_format, get_width(), get_height(), 1);
@@ -97,6 +90,9 @@ int VideoDecoder::decode_next_frame() {
             end_of_stream = true;
             return EOF;
         }
+
+        // TODO: use packet->pts or frame->best_effort_timestamp?
+        frame_time = static_cast<double>(packet->pts) * av_q2d(video_stream->time_base);
 
         // skip if not from selected stream
         if (packet->stream_index != video_stream_index) continue;
