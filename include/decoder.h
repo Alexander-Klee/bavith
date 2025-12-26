@@ -20,6 +20,8 @@ extern "C" {
 
 class VideoDecoder {
 public:
+    static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts);
+
     explicit VideoDecoder(const std::string &filename);
 
     // Disable copy
@@ -75,7 +77,7 @@ private:
     const AVCodec* decoder = nullptr;
     AVStream* video_stream = nullptr;
     int video_stream_index = -1; // TODO remove this member?
-    // AVPixelFormat hw_pixel_format;
+    AVPixelFormat hw_pixel_format = AV_PIX_FMT_NONE;
 
     bool end_of_stream = false;
     int64_t frame_pts = 0;
@@ -83,6 +85,7 @@ private:
     double duration = 0.0;
 
     int copy_frame_to_sw_frame();
+    const AVCodec *find_hw_decoder(AVHWDeviceType type);
 };
 
 #endif //BAVITH_DECODER_H

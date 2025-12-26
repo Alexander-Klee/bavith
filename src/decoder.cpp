@@ -21,13 +21,11 @@ static std::string ffmpeg_error(int errnum) {
     return std::string(buf);
 }
 
-// tries to get hw_pix_format (might be called if video params change)
-static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts) {
-    const AVPixelFormat *p;
+AVPixelFormat VideoDecoder::get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts) {
+    auto *self = static_cast<VideoDecoder *>(ctx->opaque);
 
-    for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
-        if (*p == AV_PIX_FMT_QSV) // TODO
-        // if (*p == hw_pixel_format)
+    for (const AVPixelFormat *p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
+        if (*p == self->hw_pixel_format)
             return *p;
     }
 
@@ -38,8 +36,8 @@ static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix
 VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     int ret = 0;
 
-    // AVHWDeviceType type = av_hwdevice_find_type_by_name("vaapi"); // TODO
-    AVHWDeviceType type = av_hwdevice_find_type_by_name("qsv"); // TODO
+    // AVHWDeviceType type = AV_HWDEVICE_TYPE_VAAPI; // TODO
+    AVHWDeviceType type = AV_HWDEVICE_TYPE_QSV; // TODO
 
     AVFormatContext* raw_fmt_ctx = nullptr;
     if ((ret = avformat_open_input(&raw_fmt_ctx, filename.c_str(), nullptr, nullptr)) < 0)
@@ -58,30 +56,28 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
                    ? static_cast<double>(format_context->duration) / AV_TIME_BASE
                    : 0.0;
 
-    // decoder = avcodec_find_decoder_by_name("av1_vaapi");
-    decoder = avcodec_find_decoder_by_name("av1_qsv");
-    // decoder = avcodec_find_decoder(video_stream->codecpar->codec_id);
-    if (!decoder)
-        throw std::runtime_error("Unsupported codec for file '" + filename + "'");
-
-    // TODO find config like in hw_decode.c ??? (to find hw_pixel_format?)
+    decoder = find_hw_decoder(type);
 
     decoder_context.reset(avcodec_alloc_context3(decoder));
     if (!decoder_context)
         throw std::runtime_error("Failed to allocate AVCodecContext");
 
+    // set callback for pixel format negotiation
+    decoder_context->opaque = this;
+    decoder_context->get_format = get_hw_format;
+
     if ((ret = avcodec_parameters_to_context(decoder_context.get(), video_stream->codecpar)) < 0)
         throw std::runtime_error("Failed to copy codec parameters: " + ffmpeg_error(ret));
-
-    // set callback for pixel format renegotiation
-    decoder_context->get_format = get_hw_format;
 
     AVBufferRef* raw_av_buf = nullptr;
     if (av_hwdevice_ctx_create(&raw_av_buf, type, nullptr, nullptr, 0) < 0)
         throw std::runtime_error("Failed to create specified HW device.");
     hw_device_context.reset(raw_av_buf);
     decoder_context->hw_device_ctx = av_buffer_ref(hw_device_context.get()); // TODO check failure?
+    // TODO maybe just immediatly free and let libav handle the copied reference
+    // av_buffer_unref(&raw_av_buf)
 
+    // av_log_set_level(AV_LOG_DEBUG);
 
     if ((ret = avcodec_open2(decoder_context.get(), decoder, nullptr)) < 0)
         throw std::runtime_error("Failed to open codec: " + ffmpeg_error(ret));
@@ -101,6 +97,30 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     //         format_context->streams[i]->discard = AVDISCARD_ALL;
     // }
 }
+
+
+const AVCodec *VideoDecoder::find_hw_decoder(const AVHWDeviceType type) {
+    void* iter = nullptr;
+    const AVCodec* av_codec = nullptr;
+
+    while ((av_codec = av_codec_iterate(&iter))) {
+        if (!av_codec_is_decoder(av_codec) || av_codec->id != video_stream->codecpar->codec_id)
+            continue; // skip as decoder does not support codec
+
+        for (int i = 0;; i++) {
+            const AVCodecHWConfig *config = avcodec_get_hw_config(av_codec, i);
+            if (!config) break;
+
+            // does decoder support HW and our device?
+            if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX && config->device_type == type) {
+                hw_pixel_format = config->pix_fmt;
+                return av_codec;
+            }
+        }
+    }
+    return nullptr;
+}
+
 
 
 void VideoDecoder::dump_info() const {
