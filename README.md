@@ -19,3 +19,19 @@ add_subdirectory(bavith)
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE bavith)
 ```
+
+# Usage
+
+## Decoder
+
+```c
+VideoDecoder decoder("file/path/video.mp4");
+
+int width = decoder.get_width();
+int height = decoder.get_height();
+
+while (!decoder.is_end_of_stream()) {
+    decoder.decode_next_frame();
+    AVFrame* frame = decoder.get_frame();
+}
+```
