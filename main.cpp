@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "include/decoder.h"
+#include "include/hw_decoder.h"
 #include "include/encoder.h"
 
 // TODO:
@@ -33,6 +34,7 @@ int main(int argc, char* argv[]) {
     const char* filename_dst = argv[2];
 
 
+    // HWVideoDecoder decoder(filename_src);
     VideoDecoder decoder(filename_src);
     // decoder.dump_info();
     std::cout << "fps: " << static_cast<double>(decoder.get_frame_rate().num) / decoder.get_frame_rate().den << std::endl;

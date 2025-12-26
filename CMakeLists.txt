@@ -18,7 +18,11 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
 
 add_library(${PROJECT_NAME}
         src/encoder.cpp
+        src/hw_decoder.cpp
         src/decoder.cpp
+        include/i_decoder.h
+        include/decoder.h
+        include/hw_decoder.h
 )
 
 target_include_directories(${PROJECT_NAME}

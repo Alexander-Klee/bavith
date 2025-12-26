@@ -2,8 +2,8 @@
 // Created by alex on 20.12.25.
 //
 
-#ifndef BAVITH_DECODER_H
-#define BAVITH_DECODER_H
+#ifndef BAVITH_HW_DECODER_H
+#define BAVITH_HW_DECODER_H
 
 #include <string>
 #include <vector>
@@ -20,13 +20,15 @@ extern "C" {
 }
 
 
-class VideoDecoder: public IVideoDecoder {
+class HWVideoDecoder: public IVideoDecoder {
 public:
-    explicit VideoDecoder(const std::string &filename);
+    static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts);
+
+    explicit HWVideoDecoder(const std::string &filename);
 
     // Disable copy
-    VideoDecoder(const VideoDecoder&) = delete;
-    VideoDecoder& operator=(const VideoDecoder&) = delete;
+    HWVideoDecoder(const HWVideoDecoder&) = delete;
+    HWVideoDecoder& operator=(const HWVideoDecoder&) = delete;
 
     void dump_info() const override;
     int get_width() const override;
@@ -37,6 +39,8 @@ public:
     double get_frame_time() const override;
     double get_progress() const override;
     AVFrame* get_frame() override;
+
+    AVFrame *get_hw_frame() const;
 
     /** Get the frame as a std::vector.
      *
@@ -57,25 +61,31 @@ public:
 
 private:
     // Custom deleters for unique_ptr
-    struct PktDeleter { void operator()(AVPacket* p) const { av_packet_free(&p); } };
-    struct FrameDeleter { void operator()(AVFrame* f) const { av_frame_free(&f); } };
-    struct CtxDeleter { void operator()(AVCodecContext* c) const { avcodec_free_context(&c); } };
-    struct FmtDeleter { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
+    struct PktDeleter     { void operator()(AVPacket* p)        const { av_packet_free(&p);       } };
+    struct FrameDeleter   { void operator()(AVFrame* f)         const { av_frame_free(&f);        } };
+    struct SwFrameDeleter { void operator()(AVFrame* f)         const { av_frame_free(&f);        } };
+    struct CtxDeleter     { void operator()(AVCodecContext* c)  const { avcodec_free_context(&c); } };
+    struct FmtDeleter     { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
 
     std::unique_ptr<AVFormatContext, FmtDeleter> format_context;
     std::unique_ptr<AVCodecContext, CtxDeleter> decoder_context;
     std::unique_ptr<AVPacket, PktDeleter> packet;
+    std::unique_ptr<AVFrame, SwFrameDeleter> sw_frame;
     std::unique_ptr<AVFrame, FrameDeleter> frame;
 
     std::string filename;
     const AVCodec* decoder = nullptr;
     AVStream* video_stream = nullptr;
-    int video_stream_index = -1;
+    int video_stream_index = -1; // TODO remove this member? use video_stream->index instead?
+    AVPixelFormat hw_pixel_format = AV_PIX_FMT_NONE;
 
     bool end_of_stream = false;
     int64_t frame_pts = 0;
     int64_t video_frame_count = 0;
     double duration = 0.0;
+
+    int copy_frame_to_sw_frame();
+    const AVCodec *find_hw_decoder(AVHWDeviceType type);
 };
 
-#endif //BAVITH_DECODER_H
+#endif //BAVITH_HW_DECODER_H
