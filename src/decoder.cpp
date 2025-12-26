@@ -26,7 +26,7 @@ static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix
     const AVPixelFormat *p;
 
     for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
-        if (*p == AV_PIX_FMT_VAAPI)
+        if (*p == AV_PIX_FMT_QSV) // TODO
         // if (*p == hw_pixel_format)
             return *p;
     }
@@ -38,7 +38,8 @@ static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix
 VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     int ret = 0;
 
-    AVHWDeviceType type = av_hwdevice_find_type_by_name("vaapi"); // TODO
+    // AVHWDeviceType type = av_hwdevice_find_type_by_name("vaapi"); // TODO
+    AVHWDeviceType type = av_hwdevice_find_type_by_name("qsv"); // TODO
 
     AVFormatContext* raw_fmt_ctx = nullptr;
     if ((ret = avformat_open_input(&raw_fmt_ctx, filename.c_str(), nullptr, nullptr)) < 0)
@@ -48,7 +49,7 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     if ((ret = avformat_find_stream_info(format_context.get(), nullptr)) < 0)
         throw std::runtime_error("Could not find stream info for '" + filename + "': " + ffmpeg_error(ret));
 
-    video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
+    video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     if (video_stream_index < 0)
         throw std::runtime_error("No suitable video stream found in file '" + filename + "'");
 
@@ -57,10 +58,11 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
                    ? static_cast<double>(format_context->duration) / AV_TIME_BASE
                    : 0.0;
 
-    // TODO: find best stream already yields decoder, no?
+    // decoder = avcodec_find_decoder_by_name("av1_vaapi");
+    decoder = avcodec_find_decoder_by_name("av1_qsv");
     // decoder = avcodec_find_decoder(video_stream->codecpar->codec_id);
-    // if (!decoder)
-        // throw std::runtime_error("Unsupported codec for file '" + filename + "'");
+    if (!decoder)
+        throw std::runtime_error("Unsupported codec for file '" + filename + "'");
 
     // TODO find config like in hw_decode.c ??? (to find hw_pixel_format?)
 
