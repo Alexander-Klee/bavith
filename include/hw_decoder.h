@@ -76,7 +76,6 @@ private:
     std::string filename;
     const AVCodec* decoder = nullptr;
     AVStream* video_stream = nullptr;
-    int video_stream_index = -1; // TODO remove this member? use video_stream->index instead?
     AVPixelFormat hw_pixel_format = AV_PIX_FMT_NONE;
 
     bool end_of_stream = false;

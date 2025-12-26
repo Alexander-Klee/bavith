@@ -70,7 +70,6 @@ private:
     std::string filename;
     const AVCodec* decoder = nullptr;
     AVStream* video_stream = nullptr;
-    int video_stream_index = -1;
 
     bool end_of_stream = false;
     int64_t frame_pts = 0;

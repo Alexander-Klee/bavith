@@ -50,7 +50,7 @@ HWVideoDecoder::HWVideoDecoder(const std::string &filename, const std::string &d
     if ((ret = avformat_find_stream_info(format_context.get(), nullptr)) < 0)
         throw std::runtime_error("Could not find stream info for '" + filename + "': " + ffmpeg_error(ret));
 
-    video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    int video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     if (video_stream_index < 0)
         throw std::runtime_error("No suitable video stream found in file '" + filename + "'");
 
@@ -175,7 +175,7 @@ void HWVideoDecoder::seek(double fraction) {
 
     int64_t target_pts = av_rescale_q(format_context->duration * fraction,
                                       AV_TIME_BASE_Q, video_stream->time_base);
-    av_seek_frame(format_context.get(), video_stream_index, target_pts, AVSEEK_FLAG_BACKWARD);
+    av_seek_frame(format_context.get(), video_stream->index, target_pts, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(decoder_context.get());
     end_of_stream = false;
 
@@ -224,7 +224,7 @@ int HWVideoDecoder::decode_next_frame() {
                 return ret;
             }
 
-            if (packet->stream_index == video_stream_index) {
+            if (packet->stream_index == video_stream->index) {
                 ret = avcodec_send_packet(decoder_context.get(), packet.get());
                 av_packet_unref(packet.get());
                 if (ret < 0) {
