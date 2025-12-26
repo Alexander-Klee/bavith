@@ -36,6 +36,8 @@ public:
     double get_progress() const;
     AVFrame* get_frame() const;
 
+    AVFrame *get_sw_frame();
+
     /** Get the frame as a std::vector.
      *
      * @return the frame as a vector in cpu memory or a string on error.
@@ -55,16 +57,18 @@ public:
 
 private:
     // Custom deleters for unique_ptr
-    struct PktDeleter   { void operator()(AVPacket* p)        const { av_packet_free(&p);       } };
-    struct FrameDeleter { void operator()(AVFrame* f)         const { av_frame_free(&f);        } };
-    struct CtxDeleter   { void operator()(AVCodecContext* c)  const { avcodec_free_context(&c); } };
-    struct HwCtxDeleter { void operator()(AVBufferRef* c)     const { av_buffer_unref(&c);      } };
-    struct FmtDeleter   { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
+    struct PktDeleter     { void operator()(AVPacket* p)        const { av_packet_free(&p);       } };
+    struct FrameDeleter   { void operator()(AVFrame* f)         const { av_frame_free(&f);        } };
+    struct SwFrameDeleter { void operator()(AVFrame* f)         const { av_frame_free(&f);        } };
+    struct CtxDeleter     { void operator()(AVCodecContext* c)  const { avcodec_free_context(&c); } };
+    struct HwCtxDeleter   { void operator()(AVBufferRef* c)     const { av_buffer_unref(&c);      } };
+    struct FmtDeleter     { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
 
     std::unique_ptr<AVFormatContext, FmtDeleter> format_context;
     std::unique_ptr<AVBufferRef, HwCtxDeleter> hw_device_context;
     std::unique_ptr<AVCodecContext, CtxDeleter> decoder_context;
     std::unique_ptr<AVPacket, PktDeleter> packet;
+    std::unique_ptr<AVFrame, SwFrameDeleter> sw_frame;
     std::unique_ptr<AVFrame, FrameDeleter> frame;
 
     std::string filename;
@@ -77,6 +81,8 @@ private:
     int64_t frame_pts = 0;
     int64_t video_frame_count = 0;
     double duration = 0.0;
+
+    int copy_frame_to_sw_frame();
 };
 
 #endif //BAVITH_DECODER_H

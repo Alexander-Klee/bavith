@@ -92,6 +92,9 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     frame.reset(av_frame_alloc());
     if (!frame) throw std::runtime_error("Failed to allocate AVFrame");
 
+    sw_frame.reset(av_frame_alloc());
+    if (!sw_frame) throw std::runtime_error("Failed to allocate AVFrame");
+
     // discard all non-video streams // TODO discard all non selected streams
     // for (unsigned i = 0; i < format_context->nb_streams; i++) {
     //     if (format_context->streams[i]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
@@ -112,6 +115,13 @@ double VideoDecoder::get_duration() const { return duration; }
 double VideoDecoder::get_frame_time() const { return static_cast<double>(frame_pts) * av_q2d(video_stream->time_base); }
 double VideoDecoder::get_progress() const { return get_frame_time() / duration; }
 AVFrame* VideoDecoder::get_frame() const { return frame.get(); }
+
+AVFrame* VideoDecoder::get_sw_frame() {
+    copy_frame_to_sw_frame();
+    // if (copy_frame_to_sw_frame() < 0) // TODO
+        // return nullptr;
+    return sw_frame.get();
+}
 
 std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
     // TODO copy to cpu
@@ -203,4 +213,9 @@ int VideoDecoder::decode_next_frame() {
             av_packet_unref(packet.get());
         }
     }
+}
+
+int VideoDecoder::copy_frame_to_sw_frame() {
+    // TODO unref??
+    return av_hwframe_transfer_data(sw_frame.get(), frame.get(), 0);
 }
