@@ -24,25 +24,17 @@ static std::string ffmpeg_error(int errnum) {
 VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     int ret = 0;
 
-    format_context = avformat_alloc_context();
-    if (!format_context)
-        throw std::runtime_error("Failed to allocate AVFormatContext");
-
-    if ((ret = avformat_open_input(&format_context, filename.c_str(), nullptr, nullptr)) < 0) {
-        avformat_close_input(format_context);
+    AVFormatContext* raw_fmt_ctx = nullptr;
+    if ((ret = avformat_open_input(&raw_fmt_ctx, filename.c_str(), nullptr, nullptr)) < 0)
         throw std::runtime_error("Could not open input file '" + filename + "': " + ffmpeg_error(ret));
-    }
+    format_context.reset(raw_fmt_ctx);
 
-    if ((ret = avformat_find_stream_info(format_context, nullptr)) < 0) {
-        avformat_close_input(&format_context);
+    if ((ret = avformat_find_stream_info(format_context.get(), nullptr)) < 0)
         throw std::runtime_error("Could not find stream info for '" + filename + "': " + ffmpeg_error(ret));
-    }
 
-    video_stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-    if (video_stream_index < 0) {
-        avformat_close_input(&format_context);
+    video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    if (video_stream_index < 0)
         throw std::runtime_error("No suitable video stream found in file '" + filename + "'");
-    }
 
     video_stream = format_context->streams[video_stream_index];
     duration = (format_context->duration != AV_NOPTS_VALUE)
@@ -50,43 +42,24 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
                    : 0.0;
 
     decoder = avcodec_find_decoder(video_stream->codecpar->codec_id);
-    if (!decoder) {
-        avformat_close_input(&format_context);
+    if (!decoder)
         throw std::runtime_error("Unsupported codec for file '" + filename + "'");
-    }
 
-    decoder_context = avcodec_alloc_context3(decoder);
-    if (!decoder_context) {
-        avformat_close_input(&format_context);
+    decoder_context.reset(avcodec_alloc_context3(decoder));
+    if (!decoder_context)
         throw std::runtime_error("Failed to allocate AVCodecContext");
-    }
 
-    if ((ret = avcodec_parameters_to_context(decoder_context, video_stream->codecpar)) < 0) {
-        avcodec_free_context(&decoder_context);
-        avformat_close_input(&format_context);
+    if ((ret = avcodec_parameters_to_context(decoder_context.get(), video_stream->codecpar)) < 0)
         throw std::runtime_error("Failed to copy codec parameters: " + ffmpeg_error(ret));
-    }
 
-    if ((ret = avcodec_open2(decoder_context, decoder, nullptr)) < 0) {
-        avcodec_free_context(&decoder_context);
-        avformat_close_input(&format_context);
+    if ((ret = avcodec_open2(decoder_context.get(), decoder, nullptr)) < 0)
         throw std::runtime_error("Failed to open codec: " + ffmpeg_error(ret));
-    }
 
-    packet = av_packet_alloc();
-    if (!packet) {
-        avcodec_free_context(&decoder_context);
-        avformat_close_input(&format_context);
-        throw std::runtime_error("Failed to allocate AVPacket");
-    }
+    packet.reset(av_packet_alloc());
+    if (!packet) throw std::runtime_error("Failed to allocate AVPacket");
 
-    frame = av_frame_alloc();
-    if (!frame) {
-        av_packet_free(&packet);
-        avcodec_free_context(&decoder_context);
-        avformat_close_input(&format_context);
-        throw std::runtime_error("Failed to allocate AVFrame");
-    }
+    frame.reset(av_frame_alloc());
+    if (!frame) throw std::runtime_error("Failed to allocate AVFrame");
 
     // discard all non-video streams
     // for (unsigned i = 0; i < format_context->nb_streams; i++) {
@@ -95,15 +68,9 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     // }
 }
 
-VideoDecoder::~VideoDecoder() {
-    av_packet_free(&packet);
-    av_frame_free(&frame);
-    if (decoder_context) avcodec_free_context(&decoder_context);
-    if (format_context) avformat_close_input(&format_context);
-}
 
 void VideoDecoder::dump_info() const {
-    av_dump_format(format_context, 0, filename.c_str(), 0);
+    av_dump_format(format_context.get(), 0, filename.c_str(), 0);
 }
 
 int VideoDecoder::get_width() const { return video_stream->codecpar->width; }
@@ -113,7 +80,7 @@ AVRational VideoDecoder::get_frame_rate() const { return video_stream->avg_frame
 double VideoDecoder::get_duration() const { return duration; }
 double VideoDecoder::get_frame_time() const { return static_cast<double>(frame_pts) * av_q2d(video_stream->time_base); }
 double VideoDecoder::get_progress() const { return get_frame_time() / duration; }
-AVFrame* VideoDecoder::get_frame() const { return frame; }
+AVFrame* VideoDecoder::get_frame() const { return frame.get(); }
 
 std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
     if (!frame || !frame->data[0])
@@ -142,8 +109,8 @@ void VideoDecoder::seek(double fraction) {
 
     int64_t target_pts = av_rescale_q(format_context->duration * fraction,
                                       AV_TIME_BASE_Q, video_stream->time_base);
-    av_seek_frame(format_context, video_stream_index, target_pts, AVSEEK_FLAG_BACKWARD);
-    avcodec_flush_buffers(decoder_context);
+    av_seek_frame(format_context.get(), video_stream_index, target_pts, AVSEEK_FLAG_BACKWARD);
+    avcodec_flush_buffers(decoder_context.get());
     end_of_stream = false;
 
     // decode frame until exact target time is reached
@@ -157,7 +124,7 @@ int VideoDecoder::decode_next_frame() {
     int ret;
 
     while (true) {
-        ret = avcodec_receive_frame(decoder_context, frame);
+        ret = avcodec_receive_frame(decoder_context.get(), frame.get());
         if (ret == 0) {
             frame_pts = frame->pts;
             video_frame_count++;
@@ -178,10 +145,10 @@ int VideoDecoder::decode_next_frame() {
 
         // read packets until we get one for our video
         while (true) {
-            ret = av_read_frame(format_context, packet);
+            ret = av_read_frame(format_context.get(), packet.get());
             if (ret == AVERROR_EOF) {
                 end_of_stream = true;
-                ret = avcodec_send_packet(decoder_context, nullptr); // flush decoder
+                ret = avcodec_send_packet(decoder_context.get(), nullptr); // flush decoder
                 if (ret < 0) {
                     fprintf(stderr, "Error sending flush packet: %s\n", ffmpeg_error(ret).c_str());
                     return ret;
@@ -192,8 +159,8 @@ int VideoDecoder::decode_next_frame() {
             }
 
             if (packet->stream_index == video_stream_index) {
-                ret = avcodec_send_packet(decoder_context, packet);
-                av_packet_unref(packet);
+                ret = avcodec_send_packet(decoder_context.get(), packet.get());
+                av_packet_unref(packet.get());
                 if (ret < 0) {
                     fprintf(stderr, "Error sending packet: %s\n", ffmpeg_error(ret).c_str());
                     return ret;
@@ -201,7 +168,7 @@ int VideoDecoder::decode_next_frame() {
                 break;
             }
 
-            av_packet_unref(packet);
+            av_packet_unref(packet.get());
         }
     }
 }

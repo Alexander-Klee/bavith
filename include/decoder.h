@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <expected>
+#include <memory>
 
 extern "C" {
     #include <libavformat/avformat.h>
@@ -20,7 +21,6 @@ extern "C" {
 class VideoDecoder {
 public:
     explicit VideoDecoder(const std::string &filename);
-    ~VideoDecoder();
 
     // Disable copy
     VideoDecoder(const VideoDecoder&) = delete;
@@ -54,15 +54,21 @@ public:
     int decode_next_frame();
 
 private:
+    // Custom deleters for unique_ptr
+    struct PktDeleter { void operator()(AVPacket* p) const { av_packet_free(&p); } };
+    struct FrameDeleter { void operator()(AVFrame* f) const { av_frame_free(&f); } };
+    struct CtxDeleter { void operator()(AVCodecContext* c) const { avcodec_free_context(&c); } };
+    struct FmtDeleter { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
+
+    std::unique_ptr<AVFormatContext, FmtDeleter> format_context;
+    std::unique_ptr<AVCodecContext, CtxDeleter> decoder_context;
+    std::unique_ptr<AVPacket, PktDeleter> packet;
+    std::unique_ptr<AVFrame, FrameDeleter> frame;
+
     std::string filename;
-    AVFormatContext* format_context = nullptr;
-    AVCodecContext* decoder_context = nullptr;
     const AVCodec* decoder = nullptr;
     AVStream* video_stream = nullptr;
     int video_stream_index = -1;
-
-    AVPacket* packet = nullptr;
-    AVFrame* frame = nullptr;
 
     bool end_of_stream = false;
     int64_t frame_pts = 0;
