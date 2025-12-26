@@ -34,8 +34,9 @@ int main(int argc, char* argv[]) {
     const char* filename_dst = argv[2];
 
 
-    // HWVideoDecoder decoder(filename_src);
-    VideoDecoder decoder(filename_src);
+    HWVideoDecoder decoder(filename_src, "qsv");
+    // VideoDecoder decoder(filename_src);
+
     // decoder.dump_info();
     std::cout << "fps: " << static_cast<double>(decoder.get_frame_rate().num) / decoder.get_frame_rate().den << std::endl;
 
@@ -54,12 +55,14 @@ int main(int argc, char* argv[]) {
             std::cout << "EOF" << std::endl;
             break;
         }
+        std::cout << "frame: " + std::to_string(i++) << std::endl;
+
         if (auto res = decoder.get_frame_vector()) {
             // do sth with value
             // save_pgm(res.value(), decoder.get_width(), decoder.get_height(), "frame" + std::to_string(i) + ".pgm");
             encoder.encode_frame(res.value());
-            std::cout << "frame: " + std::to_string(i) << std::endl;
-            i++;
+            // std::cout << "frame: " + std::to_string(i) << std::endl;
+            // i++;
         } else {
             std::cout << res.error() << std::endl;
         }

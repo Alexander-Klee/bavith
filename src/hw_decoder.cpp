@@ -33,13 +33,14 @@ AVPixelFormat HWVideoDecoder::get_hw_format(AVCodecContext *ctx, const AVPixelFo
     return AV_PIX_FMT_NONE;
 }
 
-HWVideoDecoder::HWVideoDecoder(const std::string &filename) : filename(filename) {
+HWVideoDecoder::HWVideoDecoder(const std::string &filename, const std::string &device_type) : filename(filename) {
     int ret = 0;
 
     // av_log_set_level(AV_LOG_DEBUG);
 
-    // AVHWDeviceType type = AV_HWDEVICE_TYPE_VAAPI; // TODO
-    AVHWDeviceType type = AV_HWDEVICE_TYPE_QSV; // TODO
+    const AVHWDeviceType type = av_hwdevice_find_type_by_name(device_type.c_str());
+    if (type == AV_HWDEVICE_TYPE_NONE)
+        throw std::runtime_error("Unknown device " + device_type);
 
     AVFormatContext* raw_fmt_ctx = nullptr;
     if ((ret = avformat_open_input(&raw_fmt_ctx, filename.c_str(), nullptr, nullptr)) < 0)

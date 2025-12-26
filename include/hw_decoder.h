@@ -24,7 +24,7 @@ class HWVideoDecoder: public IVideoDecoder {
 public:
     static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts);
 
-    explicit HWVideoDecoder(const std::string &filename);
+    explicit HWVideoDecoder(const std::string &filename, const std::string &device_type);
 
     // Disable copy
     HWVideoDecoder(const HWVideoDecoder&) = delete;
