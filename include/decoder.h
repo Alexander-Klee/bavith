@@ -55,12 +55,14 @@ public:
 
 private:
     // Custom deleters for unique_ptr
-    struct PktDeleter { void operator()(AVPacket* p) const { av_packet_free(&p); } };
-    struct FrameDeleter { void operator()(AVFrame* f) const { av_frame_free(&f); } };
-    struct CtxDeleter { void operator()(AVCodecContext* c) const { avcodec_free_context(&c); } };
-    struct FmtDeleter { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
+    struct PktDeleter   { void operator()(AVPacket* p)        const { av_packet_free(&p);       } };
+    struct FrameDeleter { void operator()(AVFrame* f)         const { av_frame_free(&f);        } };
+    struct CtxDeleter   { void operator()(AVCodecContext* c)  const { avcodec_free_context(&c); } };
+    struct HwCtxDeleter { void operator()(AVBufferRef* c)     const { av_buffer_unref(&c);      } };
+    struct FmtDeleter   { void operator()(AVFormatContext* f) const { avformat_close_input(&f); } };
 
     std::unique_ptr<AVFormatContext, FmtDeleter> format_context;
+    std::unique_ptr<AVBufferRef, HwCtxDeleter> hw_device_context;
     std::unique_ptr<AVCodecContext, CtxDeleter> decoder_context;
     std::unique_ptr<AVPacket, PktDeleter> packet;
     std::unique_ptr<AVFrame, FrameDeleter> frame;
@@ -68,7 +70,8 @@ private:
     std::string filename;
     const AVCodec* decoder = nullptr;
     AVStream* video_stream = nullptr;
-    int video_stream_index = -1;
+    int video_stream_index = -1; // TODO remove this member?
+    // AVPixelFormat hw_pixel_format;
 
     bool end_of_stream = false;
     int64_t frame_pts = 0;

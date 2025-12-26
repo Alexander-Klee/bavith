@@ -21,8 +21,24 @@ static std::string ffmpeg_error(int errnum) {
     return std::string(buf);
 }
 
+// tries to get hw_pix_format (might be called if video params change)
+static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts) {
+    const AVPixelFormat *p;
+
+    for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
+        if (*p == AV_PIX_FMT_VAAPI)
+        // if (*p == hw_pixel_format)
+            return *p;
+    }
+
+    fprintf(stderr, "Failed to get HW surface format.\n");
+    return AV_PIX_FMT_NONE;
+}
+
 VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     int ret = 0;
+
+    AVHWDeviceType type = av_hwdevice_find_type_by_name("vaapi"); // TODO
 
     AVFormatContext* raw_fmt_ctx = nullptr;
     if ((ret = avformat_open_input(&raw_fmt_ctx, filename.c_str(), nullptr, nullptr)) < 0)
@@ -32,7 +48,7 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     if ((ret = avformat_find_stream_info(format_context.get(), nullptr)) < 0)
         throw std::runtime_error("Could not find stream info for '" + filename + "': " + ffmpeg_error(ret));
 
-    video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    video_stream_index = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
     if (video_stream_index < 0)
         throw std::runtime_error("No suitable video stream found in file '" + filename + "'");
 
@@ -41,9 +57,12 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
                    ? static_cast<double>(format_context->duration) / AV_TIME_BASE
                    : 0.0;
 
-    decoder = avcodec_find_decoder(video_stream->codecpar->codec_id);
-    if (!decoder)
-        throw std::runtime_error("Unsupported codec for file '" + filename + "'");
+    // TODO: find best stream already yields decoder, no?
+    // decoder = avcodec_find_decoder(video_stream->codecpar->codec_id);
+    // if (!decoder)
+        // throw std::runtime_error("Unsupported codec for file '" + filename + "'");
+
+    // TODO find config like in hw_decode.c ??? (to find hw_pixel_format?)
 
     decoder_context.reset(avcodec_alloc_context3(decoder));
     if (!decoder_context)
@@ -51,6 +70,16 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
 
     if ((ret = avcodec_parameters_to_context(decoder_context.get(), video_stream->codecpar)) < 0)
         throw std::runtime_error("Failed to copy codec parameters: " + ffmpeg_error(ret));
+
+    // set callback for pixel format renegotiation
+    decoder_context->get_format = get_hw_format;
+
+    AVBufferRef* raw_av_buf = nullptr;
+    if (av_hwdevice_ctx_create(&raw_av_buf, type, nullptr, nullptr, 0) < 0)
+        throw std::runtime_error("Failed to create specified HW device.");
+    hw_device_context.reset(raw_av_buf);
+    decoder_context->hw_device_ctx = av_buffer_ref(hw_device_context.get()); // TODO check failure?
+
 
     if ((ret = avcodec_open2(decoder_context.get(), decoder, nullptr)) < 0)
         throw std::runtime_error("Failed to open codec: " + ffmpeg_error(ret));
@@ -61,7 +90,7 @@ VideoDecoder::VideoDecoder(const std::string &filename) : filename(filename) {
     frame.reset(av_frame_alloc());
     if (!frame) throw std::runtime_error("Failed to allocate AVFrame");
 
-    // discard all non-video streams
+    // discard all non-video streams // TODO discard all non selected streams
     // for (unsigned i = 0; i < format_context->nb_streams; i++) {
     //     if (format_context->streams[i]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
     //         format_context->streams[i]->discard = AVDISCARD_ALL;
@@ -83,6 +112,7 @@ double VideoDecoder::get_progress() const { return get_frame_time() / duration; 
 AVFrame* VideoDecoder::get_frame() const { return frame.get(); }
 
 std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() const {
+    // TODO copy to cpu
     if (!frame || !frame->data[0])
         return std::unexpected("No frame available");
 
