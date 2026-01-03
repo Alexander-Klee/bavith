@@ -14,9 +14,9 @@ extern "C" {
     #include <libavutil/frame.h>
 }
 
-class IVideoDecoder {
+class VideoDecoderBase {
 public:
-    virtual ~IVideoDecoder() = default;
+    virtual ~VideoDecoderBase() = default;
 
     virtual void dump_info() const = 0;
     virtual int get_width() const = 0;

@@ -2,8 +2,8 @@
 #include <iostream>
 #include <fstream>
 
-#include "include/decoder.h"
-#include "include/hw_decoder.h"
+#include "include/VideoDecoder.h"
+#include "include/HWVideoDecoder.h"
 #include "include/encoder.h"
 
 void save_pgm(const std::vector<uint8_t>& data, int width, int height, const std::string& filename) {

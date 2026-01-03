@@ -5,12 +5,13 @@
 #ifndef BAVITH_HW_DECODER_H
 #define BAVITH_HW_DECODER_H
 
+#include <deque>
 #include <string>
 #include <vector>
 #include <expected>
 #include <memory>
 
-#include "i_decoder.h"
+#include "VideoDecoderBase.h"
 
 extern "C" {
     #include <libavformat/avformat.h>
@@ -20,7 +21,7 @@ extern "C" {
 }
 
 
-class HWVideoDecoder: public IVideoDecoder {
+class HWVideoDecoder: public VideoDecoderBase {
 public:
     static AVPixelFormat get_hw_format(AVCodecContext *ctx, const AVPixelFormat *pix_fmts);
 

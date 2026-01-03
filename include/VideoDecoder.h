@@ -5,12 +5,13 @@
 #ifndef BAVITH_DECODER_H
 #define BAVITH_DECODER_H
 
-#include <string>
-#include <vector>
+#include <deque>
 #include <expected>
 #include <memory>
+#include <string>
+#include <vector>
 
-#include "i_decoder.h"
+#include "VideoDecoderBase.h"
 
 extern "C" {
     #include <libavformat/avformat.h>
@@ -20,7 +21,7 @@ extern "C" {
 }
 
 
-class VideoDecoder: public IVideoDecoder {
+class VideoDecoder: public VideoDecoderBase {
 public:
     explicit VideoDecoder(const std::string &filename);
 
