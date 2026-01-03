@@ -17,9 +17,10 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
 )
 
 add_library(${PROJECT_NAME}
-        src/encoder.cpp include/VideoDecoderBase.h
+        src/encoder.cpp include/encoder.h
         src/HWVideoDecoder.cpp include/HWVideoDecoder.h
         src/VideoDecoder.cpp include/VideoDecoder.h
+        src/VideoDecoderBase.cpp include/VideoDecoderBase.h
 )
 
 target_include_directories(${PROJECT_NAME}
