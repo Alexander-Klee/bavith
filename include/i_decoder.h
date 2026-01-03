@@ -16,7 +16,6 @@ extern "C" {
 
 class IVideoDecoder {
 public:
-    // Virtual destructor is CRITICAL for proper cleanup of derived classes
     virtual ~IVideoDecoder() = default;
 
     virtual void dump_info() const = 0;

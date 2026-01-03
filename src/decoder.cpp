@@ -109,13 +109,17 @@ void VideoDecoder::seek(double fraction) {
 
     int64_t target_pts = av_rescale_q(format_context->duration * fraction,
                                       AV_TIME_BASE_Q, video_stream->time_base);
-    av_seek_frame(format_context.get(), video_stream->index, target_pts, AVSEEK_FLAG_BACKWARD);
+
+    if (av_seek_frame(format_context.get(), video_stream->index, target_pts, AVSEEK_FLAG_BACKWARD) < 0)
+        throw std::runtime_error("Error seeking to frame position");
+
     avcodec_flush_buffers(decoder_context.get());
     end_of_stream = false;
 
-    // decode frame until exact target time is reached
-    while (!decode_next_frame()) {
-        if (frame_pts >= target_pts)
+    // TODO use AVCodecContext skip_frames?? (skips B frames only)
+    while (decode_next_frame() == 0) {
+        // ignore frames of the old location for forward and backward seeking
+        if (frame_pts >= target_pts && frame_pts < target_pts + 200) // TODO: magic number (make this depend on frame->duration?)
             break;
     }
 }

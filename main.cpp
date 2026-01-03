@@ -6,10 +6,6 @@
 #include "include/hw_decoder.h"
 #include "include/encoder.h"
 
-// TODO:
-// - better api
-// - seeking
-
 void save_pgm(const std::vector<uint8_t>& data, int width, int height, const std::string& filename) {
     std::ofstream file(filename, std::ios::binary);
 
