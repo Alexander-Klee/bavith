@@ -140,7 +140,7 @@ AVFrame* HWVideoDecoder::get_frame() {
     return sw_frame.get();
 }
 
-AVFrame* HWVideoDecoder::get_hw_frame() const {
+AVFrame* HWVideoDecoder::get_raw_frame() const {
     return frame.get();
 }
 

@@ -38,9 +38,9 @@ public:
     double get_duration() const override;
     double get_frame_time() const override;
     double get_progress() const override;
+    AVFrame *get_raw_frame() const override;
     AVFrame* get_frame() override;
 
-    AVFrame *get_hw_frame() const;
 
     /** Get the frame as a std::vector.
      *

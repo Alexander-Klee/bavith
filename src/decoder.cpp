@@ -81,6 +81,7 @@ double VideoDecoder::get_duration() const { return duration; }
 double VideoDecoder::get_frame_time() const { return static_cast<double>(frame_pts) * av_q2d(video_stream->time_base); }
 double VideoDecoder::get_progress() const { return get_frame_time() / duration; }
 AVFrame* VideoDecoder::get_frame() { return frame.get(); }
+AVFrame* VideoDecoder::get_raw_frame() const { return frame.get(); }
 
 std::expected<std::vector<uint8_t>, std::string> VideoDecoder::get_frame_vector() {
     if (!frame || !frame->data[0])

@@ -27,6 +27,7 @@ public:
     virtual double get_frame_time() const = 0;
     virtual double get_progress() const = 0;
     virtual AVFrame* get_frame() = 0;
+    virtual AVFrame *get_raw_frame() const = 0;
 
     virtual std::expected<std::vector<uint8_t>, std::string> get_frame_vector() = 0;
 
