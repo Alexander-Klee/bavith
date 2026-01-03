@@ -39,7 +39,7 @@ public:
     double get_progress() const override;
     AVFrame* get_raw_frame() const override;
     AVFrame* get_frame() override;
-    double get_bitrate() const;
+    double get_bitrate() const override;
 
     /** Get the frame as a std::vector.
      *
