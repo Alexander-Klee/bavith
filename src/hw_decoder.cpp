@@ -144,6 +144,19 @@ AVFrame* HWVideoDecoder::get_raw_frame() const {
     return frame.get();
 }
 
+double HWVideoDecoder::get_bitrate() const {
+    if (bitrate_window.size() < 2) return 0.0;
+
+    int64_t sum_bytes = 0;
+    for (const auto &[_, bytes]: bitrate_window)
+        sum_bytes += bytes;
+
+    int64_t time_delta = bitrate_window.back().first - bitrate_window.front().first;
+    double duration = time_delta * av_q2d(video_stream->time_base);
+
+    return sum_bytes / duration;
+}
+
 std::expected<std::vector<uint8_t>, std::string> HWVideoDecoder::get_frame_vector() {
     if (copy_frame_to_sw_frame() < 0)
         return std::unexpected("Error transferring the data to system memory");
@@ -184,6 +197,7 @@ void HWVideoDecoder::seek(double fraction) {
 
     while (decode_next_frame() == 0) {
         // ignore frames of the old location for forward and backward seeking
+        // (some decoders give old frames despite flushing)
         if (frame_pts >= target_pts && frame_pts < target_pts + 200)
             break;
     }
@@ -228,6 +242,12 @@ int HWVideoDecoder::decode_next_frame() {
             }
 
             if (packet->stream_index == video_stream->index) {
+
+                // keep track of bit rate
+                bitrate_window.emplace_back(packet->pts, packet->size);
+                if (bitrate_window.size() > max_bitrate_window)
+                    bitrate_window.pop_front();
+
                 ret = avcodec_send_packet(decoder_context.get(), packet.get());
                 av_packet_unref(packet.get());
                 if (ret < 0) {

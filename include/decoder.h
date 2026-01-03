@@ -38,6 +38,7 @@ public:
     double get_progress() const override;
     AVFrame* get_raw_frame() const override;
     AVFrame* get_frame() override;
+    double get_bitrate() const;
 
     /** Get the frame as a std::vector.
      *
@@ -76,6 +77,9 @@ private:
     int64_t frame_pts = 0;
     int64_t video_frame_count = 0;
     double duration = 0.0;
+
+    std::deque<std::pair<int64_t, int>> bitrate_window;
+    const size_t max_bitrate_window = 32;
 };
 
 #endif //BAVITH_DECODER_H
