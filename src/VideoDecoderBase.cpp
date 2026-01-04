@@ -27,7 +27,7 @@ AVFrame* VideoDecoderBase::get_raw_frame() const { return frame.get(); }
 bool VideoDecoderBase::is_end_of_stream() const { return end_of_stream; }
 
 double VideoDecoderBase::get_bitrate() const {
-    if (bitrate_window.size() < 2) return 0.0;
+    if (bitrate_window.size() < 10) return 0.0;
 
     int64_t sum_bytes = 0;
     for (const auto &[_, bytes]: bitrate_window)
